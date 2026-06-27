@@ -1,0 +1,5 @@
+[alias]
+# Dev tasks — list them with `cargo --list`
+install-local = "install --path ."          # (re)link `cog` into ~/.cargo/bin (on PATH)
+t             = "test"
+lint          = "clippy --all-targets --all-features -- -D warnings"

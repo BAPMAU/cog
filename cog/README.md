@@ -13,6 +13,13 @@ cargo build --release
 # binaire : target/release/cog
 ```
 
+Pour l'avoir directement sur le PATH (recommandé) :
+
+```sh
+cargo install-local   # (ré)installe cog dans ~/.cargo/bin
+cog --help            # utilisable depuis n'importe quel dossier
+```
+
 ## Comment ça marche
 
 Chaque commande lit ou écrit un état durable dans un fichier SQLite
@@ -66,6 +73,21 @@ Chaque commande imprime un résultat JSON :
 ```
 
 Codes de sortie : `0` succès, `2` erreur métier (domaine), `70` erreur technique.
+
+## Développement
+
+Les tâches de dev sont des alias Cargo (voir `.cargo/config.toml`). Liste-les avec :
+
+```sh
+cargo --list          # affiche les alias du projet (install-local, t, lint…)
+```
+
+```sh
+cargo t               # lance les tests
+cargo lint            # clippy en mode strict
+cargo install-local   # (ré)installe cog sur le PATH
+./coverage.sh         # rapport de couverture (HTML dans tmp/coverage/)
+```
 
 ## Pour aller plus loin
 
