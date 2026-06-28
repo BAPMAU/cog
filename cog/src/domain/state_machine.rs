@@ -69,24 +69,30 @@ impl Definition {
     }
 }
 
-/// A live machine: its rules plus where it currently sits.
+/// A live machine: its rules, where it currently sits, and an opaque mutable
+/// `context` blob. The context is consumer-owned JSON (e.g. a poll cursor); the
+/// domain never inspects its shape — it only carries it, advancing it atomically
+/// with each transition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateMachine {
     pub def: Definition,
     pub current: String,
+    pub context: serde_json::Value,
 }
 
 impl StateMachine {
-    /// Create a machine sitting at its initial state. Validates the definition.
-    pub fn define(def: Definition) -> Result<Self, DomainError> {
+    /// Create a machine sitting at its initial state, born with `context`.
+    /// Validates the definition. A machine with no cursor is defined with
+    /// `Value::Null` — there is no separate "uninitialized context" state.
+    pub fn define(def: Definition, context: serde_json::Value) -> Result<Self, DomainError> {
         def.validate()?;
         let current = def.initial.clone();
-        Ok(StateMachine { def, current })
+        Ok(StateMachine { def, current, context })
     }
 
     /// Rebuild a persisted machine. The definition was validated when first defined.
-    pub fn rehydrate(def: Definition, current: String) -> Self {
-        StateMachine { def, current }
+    pub fn rehydrate(def: Definition, current: String, context: serde_json::Value) -> Self {
+        StateMachine { def, current, context }
     }
 
     /// Move to `to`. Consumes `self` and returns the advanced machine, so an

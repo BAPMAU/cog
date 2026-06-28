@@ -231,3 +231,66 @@ fn fsm_terminal_state_blocks_further_transitions() {
     assert_eq!(code, 2);
     assert_eq!(v["error"]["code"], "illegal_transition");
 }
+
+// ---------- StateMachine Context (poll cursor) ----------
+
+#[test]
+fn fsm_define_with_context_is_returned_by_state() {
+    let s = store_path("fsm_ctx_define");
+    let (code, _) = run(&s, &["fsm", "define", "w", DEF, "--context", "{\"ci_head\":\"abc\"}"]);
+    assert_eq!(code, 0);
+
+    let (code, v) = run(&s, &["fsm", "state", "w"]);
+    assert_eq!(code, 0);
+    assert_eq!(v["value"]["current"], "idle");
+    assert_eq!(v["value"]["context"]["ci_head"], "abc");
+}
+
+#[test]
+fn fsm_transition_with_context_advances_state_and_replaces_blob() {
+    let s = store_path("fsm_ctx_transition");
+    run(&s, &["fsm", "define", "w", DEF, "--context", "{\"ci_head\":\"old\"}"]);
+
+    let (code, v) = run(
+        &s,
+        &["fsm", "transition", "w", "polling", "--context", "{\"ci_head\":\"new\"}"],
+    );
+    assert_eq!(code, 0);
+    assert_eq!(v["value"]["current"], "polling");
+
+    // a separate process sees both the advanced state and the replaced blob
+    let (_, v) = run(&s, &["fsm", "state", "w"]);
+    assert_eq!(v["value"]["current"], "polling");
+    assert_eq!(v["value"]["context"]["ci_head"], "new");
+}
+
+#[test]
+fn fsm_transition_without_context_preserves_the_blob() {
+    let s = store_path("fsm_ctx_preserve");
+    run(&s, &["fsm", "define", "w", DEF, "--context", "{\"ci_head\":\"keep\"}"]);
+
+    let (code, _) = run(&s, &["fsm", "transition", "w", "polling"]);
+    assert_eq!(code, 0);
+
+    let (_, v) = run(&s, &["fsm", "state", "w"]);
+    assert_eq!(v["value"]["current"], "polling");
+    assert_eq!(v["value"]["context"]["ci_head"], "keep");
+}
+
+#[test]
+fn fsm_define_without_context_defaults_to_null() {
+    let s = store_path("fsm_ctx_null");
+    run(&s, &["fsm", "define", "w", DEF]);
+
+    let (_, v) = run(&s, &["fsm", "state", "w"]);
+    assert_eq!(v["value"]["context"], Value::Null);
+}
+
+#[test]
+fn fsm_invalid_context_json_is_technical_error() {
+    let s = store_path("fsm_ctx_badjson");
+    let (code, v) = run(&s, &["fsm", "define", "w", DEF, "--context", "not-json"]);
+    assert_eq!(code, 70);
+    assert_eq!(v["ok"], false);
+    assert_eq!(v["error"]["kind"], "technical");
+}

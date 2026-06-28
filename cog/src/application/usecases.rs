@@ -42,8 +42,13 @@ pub struct DefineMachine<'a, S: StateStore> {
 }
 
 impl<'a, S: StateStore> DefineMachine<'a, S> {
-    pub fn run(&self, name: &str, def: Definition) -> Result<String, AppError> {
-        let machine = StateMachine::define(def)?;
+    pub fn run(
+        &self,
+        name: &str,
+        def: Definition,
+        context: serde_json::Value,
+    ) -> Result<String, AppError> {
+        let machine = StateMachine::define(def, context)?;
         self.store.save(name, &machine)?;
         Ok(machine.current)
     }
@@ -57,12 +62,22 @@ pub struct Transition<'a, S: StateStore> {
 }
 
 impl<'a, S: StateStore> Transition<'a, S> {
-    pub fn run(&self, name: &str, to: &str) -> Result<String, AppError> {
+    /// `context` is the whole-blob replacement: `Some` overwrites the cursor in the
+    /// same transaction as the phase move (atomic); `None` leaves it untouched.
+    pub fn run(
+        &self,
+        name: &str,
+        to: &str,
+        context: Option<serde_json::Value>,
+    ) -> Result<String, AppError> {
         let machine = self
             .store
             .load(name)?
             .ok_or_else(|| DomainError::NotInitialized { name: name.to_string() })?;
-        let advanced = machine.transition(to)?;
+        let mut advanced = machine.transition(to)?;
+        if let Some(ctx) = context {
+            advanced.context = ctx;
+        }
         self.store.save(name, &advanced)?;
         Ok(advanced.current)
     }
@@ -74,11 +89,12 @@ pub struct GetState<'a, S: StateStore> {
 }
 
 impl<'a, S: StateStore> GetState<'a, S> {
-    pub fn run(&self, name: &str) -> Result<String, AppError> {
+    /// Returns `(current state, context blob)` — the consumer reads its cursor here.
+    pub fn run(&self, name: &str) -> Result<(String, serde_json::Value), AppError> {
         let machine = self
             .store
             .load(name)?
             .ok_or_else(|| DomainError::NotInitialized { name: name.to_string() })?;
-        Ok(machine.current)
+        Ok((machine.current, machine.context))
     }
 }

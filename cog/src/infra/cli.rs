@@ -15,8 +15,8 @@ pub struct Invocation {
 pub enum Command {
     LogAdd { stream: String, payload: String },
     LogQuery { stream: String },
-    FsmDefine { name: String, def_json: String },
-    FsmTransition { name: String, to: String },
+    FsmDefine { name: String, def_json: String, context_json: Option<String> },
+    FsmTransition { name: String, to: String, context_json: Option<String> },
     FsmState { name: String },
 }
 
@@ -67,16 +67,21 @@ pub const HELP_FSM: &str = "\
 cog fsm — state machine whose states & transitions are data
 
 USAGE:
-    cog fsm define <name> <def-json>   define a machine from a JSON definition
-    cog fsm transition <name> <state>  move a machine to a new state
-    cog fsm state <name>               show a machine's current state
+    cog fsm define <name> <def-json> [--context <json>]   define a machine
+    cog fsm transition <name> <state> [--context <json>]   move to a new state
+    cog fsm state <name>                                   show current + context
 
 The definition lists states (each with optional terminal/description) and the
 allowed transitions; the machine starts at \"initial\".
 
+--context carries an opaque JSON blob (e.g. a poll cursor) alongside the state.
+cog never inspects its shape. On `define` it is the machine's initial context
+(default: null); on `transition` it WHOLLY replaces the blob in the same
+transaction as the move (omit it to leave the blob untouched). `state` returns it.
+
 EXAMPLES:
     cog fsm define watch '{\"states\":[{\"name\":\"idle\"},{\"name\":\"done\",\"terminal\":true}],\"transitions\":[{\"from\":\"idle\",\"to\":\"done\"}],\"initial\":\"idle\"}'
-    cog fsm transition watch done
+    cog fsm transition watch done --context '{\"last_seen\":42}'
     cog fsm state watch";
 
 /// Pick the most specific help for what the user has typed so far.
@@ -91,6 +96,7 @@ fn help_for(group: &str) -> &'static str {
 pub fn parse(args: &[String]) -> Result<Invocation, Usage> {
     let mut store = DEFAULT_STORE.to_string();
     let mut help = false;
+    let mut context_json: Option<String> = None;
     let mut rest: Vec<String> = Vec::new();
 
     let mut i = 0;
@@ -105,6 +111,17 @@ pub fn parse(args: &[String]) -> Result<Invocation, Usage> {
                         help: HELP_TOP,
                     })?
                     .clone();
+            }
+            "--context" => {
+                i += 1;
+                context_json = Some(
+                    args.get(i)
+                        .ok_or_else(|| Usage::Error {
+                            sentence: "Option --context expects a JSON blob.".to_string(),
+                            help: HELP_FSM,
+                        })?
+                        .clone(),
+                );
             }
             "-h" | "--help" => help = true,
             _ => rest.push(args[i].clone()),
@@ -133,10 +150,12 @@ pub fn parse(args: &[String]) -> Result<Invocation, Usage> {
         ("fsm", "define") => Command::FsmDefine {
             name: req(&rest, 2, "name", HELP_FSM)?,
             def_json: req(&rest, 3, "json definition", HELP_FSM)?,
+            context_json,
         },
         ("fsm", "transition") => Command::FsmTransition {
             name: req(&rest, 2, "name", HELP_FSM)?,
             to: req(&rest, 3, "target state", HELP_FSM)?,
+            context_json,
         },
         ("fsm", "state") => Command::FsmState {
             name: req(&rest, 2, "name", HELP_FSM)?,
