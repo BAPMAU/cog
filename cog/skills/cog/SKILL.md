@@ -45,7 +45,15 @@ advance step by step; illegal moves are refused.
 ```sh
 cog fsm define <name> '<def-json>'   # → value.current  (starts at "initial")
 cog fsm transition <name> <state>    # → value.current  (validates the move)
-cog fsm state <name>                 # → value.current
+cog fsm state <name>                 # → value.current, value.context
+```
+
+A machine also carries a **Context**: an opaque JSON blob (e.g. a poll cursor) advanced in
+the **same transaction** as a transition. `--context '<json>'` on `define`/`transition`
+WHOLLY replaces it (omit on `transition` to keep it); `state` returns it under `value.context`.
+
+```sh
+cog fsm transition <name> <state> --context '{"last_seen":42}'   # phase + cursor move atomically
 ```
 
 Minimal definition (full schema in [REFERENCE.md](REFERENCE.md)):

@@ -44,10 +44,16 @@ An edge or `initial` referencing an undeclared state fails with `unknown_state` 
 exit 2). The whole definition (rules + current state) is persisted, so a machine rehydrates
 from its name alone.
 
-## Dedup without a cursor primitive
+## Cursor (Context) vs set-membership dedup
 
-There is no dedicated cursor/dedup command. To avoid reprocessing across runs, append handled
-items to a `log` stream and `query` it on the next run to skip what's already there.
+For a **resumable position** (high-water marks), keep it in the fsm **Context** so phase and
+cursor advance in one transaction: `cog fsm transition <name> <state> --context '<json>'`,
+read it back with `cog fsm state <name>` → `value.context`. The blob is opaque (cog never
+validates its shape) and replaced wholesale. There is no standalone cursor entity — a cursor
+lives inside a machine (root ADR 0001).
+
+For **set-membership dedup** (which exact items were handled, not just "up to where"), append
+handled items to a `log` stream and `query` it on the next run to skip what's already there.
 
 ## Durability / concurrency
 
