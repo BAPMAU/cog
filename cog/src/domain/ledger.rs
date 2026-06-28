@@ -29,7 +29,7 @@ impl Stream {
     /// Entries, most recent first.
     pub fn most_recent_first(&self) -> Vec<LogEntry> {
         let mut out = self.entries.clone();
-        out.sort_by(|a, b| b.seq.cmp(&a.seq));
+        out.sort_by_key(|e| std::cmp::Reverse(e.seq));
         out
     }
 
