@@ -74,10 +74,7 @@ impl<'a, S: StateStore> Transition<'a, S> {
             .store
             .load(name)?
             .ok_or_else(|| DomainError::NotInitialized { name: name.to_string() })?;
-        let mut advanced = machine.transition(to)?;
-        if let Some(ctx) = context {
-            advanced.context = ctx;
-        }
+        let advanced = machine.transition(to)?.with_context(context);
         self.store.save(name, &advanced)?;
         Ok(advanced.current)
     }

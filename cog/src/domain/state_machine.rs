@@ -118,4 +118,13 @@ impl StateMachine {
         }
         Ok(StateMachine { current: to.to_string(), ..self })
     }
+
+    /// Fold an optional context blob into the machine, consuming `self` and
+    /// returning a new value: `Some` wholly replaces the blob, `None` preserves it.
+    pub fn with_context(self, context: Option<serde_json::Value>) -> Self {
+        match context {
+            Some(context) => StateMachine { context, ..self },
+            None => self,
+        }
+    }
 }
