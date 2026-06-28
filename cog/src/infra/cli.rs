@@ -103,25 +103,15 @@ pub fn parse(args: &[String]) -> Result<Invocation, Usage> {
     while i < args.len() {
         match args[i].as_str() {
             "--store" => {
-                i += 1;
-                store = args
-                    .get(i)
-                    .ok_or_else(|| Usage::Error {
-                        sentence: "Option --store expects a path.".to_string(),
-                        help: HELP_TOP,
-                    })?
-                    .clone();
+                store = next_value(args, &mut i, "Option --store expects a path.", HELP_TOP)?;
             }
             "--context" => {
-                i += 1;
-                context_json = Some(
-                    args.get(i)
-                        .ok_or_else(|| Usage::Error {
-                            sentence: "Option --context expects a JSON blob.".to_string(),
-                            help: HELP_FSM,
-                        })?
-                        .clone(),
-                );
+                context_json = Some(next_value(
+                    args,
+                    &mut i,
+                    "Option --context expects a JSON blob.",
+                    HELP_FSM,
+                )?);
             }
             "-h" | "--help" => help = true,
             _ => rest.push(args[i].clone()),
@@ -177,6 +167,21 @@ pub fn parse(args: &[String]) -> Result<Invocation, Usage> {
     };
 
     Ok(Invocation { store, command })
+}
+
+/// Read the value following a flag at `*i`, advancing the cursor past it. A
+/// `Usage::Error` (with `sentence`) is returned when the flag is the last token.
+fn next_value(
+    args: &[String],
+    i: &mut usize,
+    sentence: &str,
+    help: &'static str,
+) -> Result<String, Usage> {
+    *i += 1;
+    args.get(*i).cloned().ok_or_else(|| Usage::Error {
+        sentence: sentence.to_string(),
+        help,
+    })
 }
 
 fn req(rest: &[String], idx: usize, name: &str, help: &'static str) -> Result<String, Usage> {
