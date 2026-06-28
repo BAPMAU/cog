@@ -11,7 +11,7 @@ un état qui **survit entre les process** : des journaux d'événements et des m
 Le plus simple — installe `cog` sur le PATH depuis le dépôt (nécessite une toolchain Rust) :
 
 ```sh
-cargo install --git https://github.com/BAPMAU/cog --locked
+cargo install --git https://github.com/BAPMAU/cog cog --locked
 cog --help            # utilisable depuis n'importe quel dossier
 ```
 

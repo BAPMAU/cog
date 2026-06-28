@@ -1,0 +1,5 @@
+# Virtual workspace: the cog crate lives in cog/. This root manifest lets
+# `cargo install --git <repo> cog` resolve the package from the repo root.
+[workspace]
+members = ["cog"]
+resolver = "2"

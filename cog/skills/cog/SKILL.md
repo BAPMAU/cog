@@ -12,7 +12,7 @@ Check it's installed with `cog --help`. If `command not found`, install it (need
 toolchain), then retry the command:
 
 ```sh
-cargo install --git https://github.com/BAPMAU/cog --locked
+cargo install --git https://github.com/BAPMAU/cog cog --locked
 ```
 
 See [REFERENCE.md](REFERENCE.md) if `cargo` is unavailable or to update an existing install.

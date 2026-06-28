@@ -8,7 +8,7 @@ Disclosed detail for [`cog`](SKILL.md): install, the full fsm schema, durability
 (needs a Rust toolchain — `rustup`):
 
 ```sh
-cargo install --git https://github.com/BAPMAU/cog --locked      # install or update
+cargo install --git https://github.com/BAPMAU/cog cog --locked      # install or update
 ```
 
 `cargo install` freezes a snapshot of the binary; re-run the same command to pull a newer version.
