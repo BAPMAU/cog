@@ -55,7 +55,9 @@ impl Definition {
 
     fn require_known(&self, name: &str) -> Result<(), DomainError> {
         if self.state(name).is_none() {
-            return Err(DomainError::UnknownState { state: name.to_string() });
+            return Err(DomainError::UnknownState {
+                state: name.to_string(),
+            });
         }
         Ok(())
     }
@@ -65,28 +67,44 @@ impl Definition {
     }
 
     fn allows(&self, from: &str, to: &str) -> bool {
-        self.transitions.iter().any(|t| t.from == from && t.to == to)
+        self.transitions
+            .iter()
+            .any(|t| t.from == from && t.to == to)
     }
 }
 
-/// A live machine: its rules plus where it currently sits.
+/// A live machine: its rules, where it currently sits, and an opaque mutable
+/// `context` blob. The context is consumer-owned JSON (e.g. a poll cursor); the
+/// domain never inspects its shape — it only carries it, advancing it atomically
+/// with each transition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateMachine {
     pub def: Definition,
     pub current: String,
+    pub context: serde_json::Value,
 }
 
 impl StateMachine {
-    /// Create a machine sitting at its initial state. Validates the definition.
-    pub fn define(def: Definition) -> Result<Self, DomainError> {
+    /// Create a machine sitting at its initial state, born with `context`.
+    /// Validates the definition. A machine with no cursor is defined with
+    /// `Value::Null` — there is no separate "uninitialized context" state.
+    pub fn define(def: Definition, context: serde_json::Value) -> Result<Self, DomainError> {
         def.validate()?;
         let current = def.initial.clone();
-        Ok(StateMachine { def, current })
+        Ok(StateMachine {
+            def,
+            current,
+            context,
+        })
     }
 
     /// Rebuild a persisted machine. The definition was validated when first defined.
-    pub fn rehydrate(def: Definition, current: String) -> Self {
-        StateMachine { def, current }
+    pub fn rehydrate(def: Definition, current: String, context: serde_json::Value) -> Self {
+        StateMachine {
+            def,
+            current,
+            context,
+        }
     }
 
     /// Move to `to`. Consumes `self` and returns the advanced machine, so an
@@ -110,6 +128,23 @@ impl StateMachine {
                 to: to.to_string(),
             });
         }
-        Ok(StateMachine { current: to.to_string(), ..self })
+        Ok(StateMachine {
+            current: to.to_string(),
+            ..self
+        })
+    }
+
+    /// Whether the machine currently sits on a terminal state.
+    pub fn is_terminal(&self) -> bool {
+        self.def.is_terminal(&self.current)
+    }
+
+    /// Fold an optional context blob into the machine, consuming `self` and
+    /// returning a new value: `Some` wholly replaces the blob, `None` preserves it.
+    pub fn with_context(self, context: Option<serde_json::Value>) -> Self {
+        match context {
+            Some(context) => StateMachine { context, ..self },
+            None => self,
+        }
     }
 }

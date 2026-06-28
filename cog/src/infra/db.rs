@@ -27,8 +27,15 @@ fn migrate(conn: &Connection) -> Result<(), TechnicalError> {
         CREATE TABLE IF NOT EXISTS state_machine (
             name    TEXT PRIMARY KEY,
             def     TEXT NOT NULL,
-            current TEXT NOT NULL
+            current TEXT NOT NULL,
+            context TEXT NOT NULL DEFAULT 'null'
         );",
     )?;
+    // Older stores predate the context column; add it idempotently. SQLite has no
+    // `ADD COLUMN IF NOT EXISTS`, so a duplicate-column error here is expected and benign.
+    let _ = conn.execute(
+        "ALTER TABLE state_machine ADD COLUMN context TEXT NOT NULL DEFAULT 'null'",
+        [],
+    );
     Ok(())
 }

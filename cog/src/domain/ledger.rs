@@ -14,6 +14,16 @@ pub struct LogEntry {
     pub payload: String,
 }
 
+/// A lightweight projection of a stream for overviews: counts and the last
+/// entry's coordinates, without loading any entry.
+#[derive(Debug, Clone)]
+pub struct StreamSummary {
+    pub name: String,
+    pub count: i64,
+    pub last_seq: i64,
+    pub last_at: i64,
+}
+
 /// View of a stream. Used to express read invariants.
 pub struct Stream {
     name: String,
@@ -23,20 +33,25 @@ pub struct Stream {
 impl Stream {
     /// Rebuild a stream from the store (entries already sorted by `seq`).
     pub fn load(name: impl Into<String>, entries: Vec<LogEntry>) -> Self {
-        Stream { name: name.into(), entries }
+        Stream {
+            name: name.into(),
+            entries,
+        }
     }
 
     /// Entries, most recent first.
     pub fn most_recent_first(&self) -> Vec<LogEntry> {
         let mut out = self.entries.clone();
-        out.sort_by(|a, b| b.seq.cmp(&a.seq));
+        out.sort_by_key(|e| std::cmp::Reverse(e.seq));
         out
     }
 
     /// Read invariant: querying an empty stream is a *domain* error.
     pub fn require_non_empty(&self) -> Result<&Self, DomainError> {
         if self.entries.is_empty() {
-            return Err(DomainError::EmptyStream { stream: self.name.clone() });
+            return Err(DomainError::EmptyStream {
+                stream: self.name.clone(),
+            });
         }
         Ok(self)
     }

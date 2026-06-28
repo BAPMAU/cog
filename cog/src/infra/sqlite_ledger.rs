@@ -1,7 +1,7 @@
 //! `LedgerStore` adapter over a shared `&Transaction` (one transaction per command).
 
 use crate::application::ports::LedgerStore;
-use crate::domain::ledger::{LogEntry, Stream};
+use crate::domain::ledger::{LogEntry, Stream, StreamSummary};
 use crate::error::TechnicalError;
 use rusqlite::Transaction;
 
@@ -40,5 +40,26 @@ impl<'tx> LedgerStore for SqliteLedger<'tx> {
             entries.push(row?);
         }
         Ok(Stream::load(stream, entries))
+    }
+
+    fn stream_summaries(&self) -> Result<Vec<StreamSummary>, TechnicalError> {
+        // One aggregate row per stream — the entries themselves stay in the table.
+        let mut stmt = self.tx.prepare(
+            "SELECT stream, COUNT(*), MAX(seq), MAX(at_millis)
+             FROM log_entry GROUP BY stream ORDER BY stream",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(StreamSummary {
+                name: r.get(0)?,
+                count: r.get(1)?,
+                last_seq: r.get(2)?,
+                last_at: r.get(3)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
     }
 }

@@ -231,3 +231,176 @@ fn fsm_terminal_state_blocks_further_transitions() {
     assert_eq!(code, 2);
     assert_eq!(v["error"]["code"], "illegal_transition");
 }
+
+// ---------- StateMachine Context (poll cursor) ----------
+
+#[test]
+fn fsm_define_with_context_is_returned_by_state() {
+    let s = store_path("fsm_ctx_define");
+    let (code, _) = run(
+        &s,
+        &[
+            "fsm",
+            "define",
+            "w",
+            DEF,
+            "--context",
+            "{\"ci_head\":\"abc\"}",
+        ],
+    );
+    assert_eq!(code, 0);
+
+    let (code, v) = run(&s, &["fsm", "state", "w"]);
+    assert_eq!(code, 0);
+    assert_eq!(v["value"]["current"], "idle");
+    assert_eq!(v["value"]["context"]["ci_head"], "abc");
+}
+
+#[test]
+fn fsm_transition_with_context_advances_state_and_replaces_blob() {
+    let s = store_path("fsm_ctx_transition");
+    run(
+        &s,
+        &[
+            "fsm",
+            "define",
+            "w",
+            DEF,
+            "--context",
+            "{\"ci_head\":\"old\"}",
+        ],
+    );
+
+    let (code, v) = run(
+        &s,
+        &[
+            "fsm",
+            "transition",
+            "w",
+            "polling",
+            "--context",
+            "{\"ci_head\":\"new\"}",
+        ],
+    );
+    assert_eq!(code, 0);
+    assert_eq!(v["value"]["current"], "polling");
+
+    // a separate process sees both the advanced state and the replaced blob
+    let (_, v) = run(&s, &["fsm", "state", "w"]);
+    assert_eq!(v["value"]["current"], "polling");
+    assert_eq!(v["value"]["context"]["ci_head"], "new");
+}
+
+#[test]
+fn fsm_transition_without_context_preserves_the_blob() {
+    let s = store_path("fsm_ctx_preserve");
+    run(
+        &s,
+        &[
+            "fsm",
+            "define",
+            "w",
+            DEF,
+            "--context",
+            "{\"ci_head\":\"keep\"}",
+        ],
+    );
+
+    let (code, _) = run(&s, &["fsm", "transition", "w", "polling"]);
+    assert_eq!(code, 0);
+
+    let (_, v) = run(&s, &["fsm", "state", "w"]);
+    assert_eq!(v["value"]["current"], "polling");
+    assert_eq!(v["value"]["context"]["ci_head"], "keep");
+}
+
+#[test]
+fn fsm_define_without_context_defaults_to_null() {
+    let s = store_path("fsm_ctx_null");
+    run(&s, &["fsm", "define", "w", DEF]);
+
+    let (_, v) = run(&s, &["fsm", "state", "w"]);
+    assert_eq!(v["value"]["context"], Value::Null);
+}
+
+#[test]
+fn fsm_invalid_context_json_is_technical_error() {
+    let s = store_path("fsm_ctx_badjson");
+    let (code, v) = run(&s, &["fsm", "define", "w", DEF, "--context", "not-json"]);
+    assert_eq!(code, 70);
+    assert_eq!(v["ok"], false);
+    assert_eq!(v["error"]["kind"], "technical");
+}
+
+// ---------- inspect (store overview) ----------
+
+#[test]
+fn inspect_empty_store_returns_empty_overview() {
+    let s = store_path("inspect_empty");
+    let (code, v) = run(&s, &["inspect"]);
+    assert_eq!(code, 0);
+    assert_eq!(v["value"]["machines"], serde_json::json!([]));
+    assert_eq!(v["value"]["streams"], serde_json::json!([]));
+}
+
+#[test]
+fn inspect_summarizes_streams_and_machines() {
+    let s = store_path("inspect_overview");
+    run(&s, &["log", "add", "alpha", "{\"n\":1}"]);
+    run(&s, &["log", "add", "alpha", "{\"n\":2}"]);
+    run(&s, &["log", "add", "beta", "{\"n\":1}"]);
+    run(&s, &["fsm", "define", "w", DEF, "--context", "{\"cur\":7}"]);
+
+    let (code, v) = run(&s, &["inspect"]);
+    assert_eq!(code, 0);
+
+    // streams are sorted by name, with per-stream count and last seq.
+    let streams = v["value"]["streams"].as_array().unwrap();
+    assert_eq!(streams.len(), 2);
+    assert_eq!(streams[0]["name"], "alpha");
+    assert_eq!(streams[0]["count"], 2);
+    assert_eq!(streams[0]["last_seq"], 2);
+    assert_eq!(streams[1]["name"], "beta");
+    assert_eq!(streams[1]["count"], 1);
+
+    // the machine summary carries current state, terminal flag and context presence.
+    let machines = v["value"]["machines"].as_array().unwrap();
+    assert_eq!(machines.len(), 1);
+    assert_eq!(machines[0]["name"], "w");
+    assert_eq!(machines[0]["current"], "idle");
+    assert_eq!(machines[0]["terminal"], false);
+    assert_eq!(machines[0]["has_context"], true);
+}
+
+#[test]
+fn inspect_name_filter_keeps_only_matching_entries() {
+    let s = store_path("inspect_filter");
+    run(&s, &["log", "add", "watch-events", "{}"]);
+    run(&s, &["log", "add", "other", "{}"]);
+    run(&s, &["fsm", "define", "watch", DEF]);
+    run(&s, &["fsm", "define", "unrelated", DEF]);
+
+    let (code, v) = run(&s, &["inspect", "--name", "watch"]);
+    assert_eq!(code, 0);
+
+    let streams = v["value"]["streams"].as_array().unwrap();
+    assert_eq!(streams.len(), 1);
+    assert_eq!(streams[0]["name"], "watch-events");
+
+    let machines = v["value"]["machines"].as_array().unwrap();
+    assert_eq!(machines.len(), 1);
+    assert_eq!(machines[0]["name"], "watch");
+}
+
+#[test]
+fn inspect_reports_terminal_state_and_absent_context() {
+    let s = store_path("inspect_terminal");
+    run(&s, &["fsm", "define", "w", DEF]); // no --context
+    run(&s, &["fsm", "transition", "w", "done"]); // idle -> done (terminal)
+
+    let (_, v) = run(&s, &["inspect"]);
+    let machines = v["value"]["machines"].as_array().unwrap();
+    assert_eq!(machines[0]["current"], "done");
+    assert_eq!(machines[0]["terminal"], true);
+    assert_eq!(machines[0]["has_context"], false);
+}

@@ -77,10 +77,54 @@ avant le pipeline DB). Commande réellement erronée → erreur JSON propre ("no
 - main : `parse` sorti de `run` ; `run(Invocation)`. Exit codes : 0 / 2 domain / 64 usage / 70 technical.
 - 16 tests verts (run_raw capture stdout+stderr). Binaire global réinstallé.
 
-### Itération 3 — Cursor / SeenSet (dédup poll)  [À VENIR]
-Entités "fermées". Cursor = position de poll monotone (survit compaction). SeenSet = ids déjà vus.
-Premier consommateur watch-pull-request : curseur de poll + ledger.
+### Itération 3 — Context de FSM (dédup poll)  [FAIT — TDD, `cargo test`]
+DÉCISION (ADR 0001) : on abandonne les entités fermées `Cursor`/`SeenSet`. À la place, la
+StateMachine porte un `Context` — un petit blob JSON mutable, avancé dans la MÊME transaction
+que la transition. Le curseur de poll d'un consommateur (high-water marks) vit dans ce Context.
+Raison : phase + position doivent bouger atomiquement (1 commande = 1 transaction).
+Les ids GitHub étant monotones, un high-water mark suffit — pas besoin d'un SeenSet.
+Premier consommateur : le harness watch-pr (FSM de phase + curseur dans le Context + ledger).
+
+Construit en TDD (tranches verticales, un test → une impl). 5 comportements verrouillés
+(tests/cli.rs, total 21 verts) :
+- `define --context '<json>'` stocke le blob ; `state` renvoie `{current, context}`.
+- `transition --context '<json>'` avance l'état ET remplace le blob, atomiquement (vérifié
+  inter-process).
+- `transition` SANS `--context` préserve le blob (l'état bouge, le curseur reste).
+- `define` sans `--context` → context `null` (pas d'état "context non initialisé" séparé).
+- `--context` au JSON invalide → erreur technique (exit 70), comme une def JSON invalide.
+
+Sémantique : blob OPAQUE (cog ne valide jamais sa forme), remplacement INTÉGRAL.
+Couches touchées : `StateMachine.context: serde_json::Value` (define/rehydrate/transition le
+portent) ; migration `state_machine` (+colonne `context`, `ALTER TABLE` gardé pour bases
+existantes) ; sqlite_state load/save ; use cases `DefineMachine`(context) + `Transition`(Option)
++ `GetState`→`(current, context)` ; cli flag `--context` (valeur) ; main `parse_context`.
+
+### Skill watch-pr (consommateur)  [FAIT — non testé en live]
+`cog/skills/watch-pr/SKILL.md` (<100 l.) + `REFERENCE.md` écrits : Durable Harness (ADR 0002)
+au-dessus de la feature Context. FSM `triage → fix_ci|handle_comments|await_review → triage`
+(+`escalated`/`done`), curseur de poll dans le Context, Workers jetables + Ledger, escalade à
+arrêt franc. Définition FSM + transition `--context` vérifiées de bout en bout sur le binaire.
+Commandes `gh` reprises de watch-pull-request. Skill `cog` (SKILL+REFERENCE) aligné sur `--context`.
+
+### Itération 4 — `cog inspect` (aperçu du store)  [FAIT — `cargo test`]
+Manque comblé : aucune commande ne permettait de DÉCOUVRIR le contenu d'un store (`log query`
+et `fsm state` exigent le nom à l'avance). `cog inspect [--name <substr>]` liste, en lecture
+seule, un RÉSUMÉ de chaque entité.
+- machine : `{name, current, terminal, has_context}` ; stream : `{name, count, last_seq, last_at}`.
+- Sortie : `{"machines":[...],"streams":[...]}`, triées par nom. `--name` filtre les deux familles
+  par sous-chaîne (`name.contains`, dans le use case).
+- Streams résumés par AGRÉGAT SQL (`COUNT/MAX(seq)/MAX(at_millis) GROUP BY stream`) — aucune
+  entrée chargée. Machines via `StateStore::list()` (rehydrate + `is_terminal()`).
+- Décisions utilisateur : résumé seul (pas de context complet ni dernières entrées) ; un seul
+  filtre `--name` (pas de `--kind`/`--state`).
+- Couches : domain `StreamSummary` + `StateMachine::is_terminal()` pub ; ports
+  `stream_summaries()`/`list()` ; use case `Inspect{ledger,state}` (read-model `Overview`/
+  `MachineSummary`) ; adapters sqlite ; cli flag `--name` + `HELP_INSPECT` ; main dispatch.
+- 4 tests e2e ajoutés (total 25 verts) : store vide, résumé multi-stream+fsm, filtre `--name`,
+  état terminal + context absent. clippy clean.
 
 ## Note pour reprise
-Pas de tests `cargo test` encore (vérif manuelle CLI). Si on veut sécuriser : tests unitaires
-domaine (state_machine transitions) sans I/O. Demander au user s'il veut TDD pour la suite.
+Reste à faire : (1) `cargo install --path .` — le `cog` global est un snapshot d'avant Context ;
+le skill watch-pr invoque le `cog` du PATH. (2) Commiter (feature + docs design + skill).
+(3) Test live de watch-pr sur une vraie PR. Push sur `main` bloqué par policy → demander/branche.

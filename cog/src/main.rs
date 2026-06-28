@@ -11,7 +11,7 @@ mod domain;
 mod error;
 mod infra;
 
-use application::usecases::{AddLogEntry, DefineMachine, GetState, QueryLog, Transition};
+use application::usecases::{AddLogEntry, DefineMachine, GetState, Inspect, QueryLog, Transition};
 use domain::state_machine::Definition;
 use error::AppError;
 use infra::cli::{self, Command};
@@ -70,7 +70,10 @@ fn run(inv: cli::Invocation) -> Result<serde_json::Value, AppError> {
         Command::LogAdd { stream, payload } => {
             validate_json(&payload)?;
             let store = SqliteLedger { tx: &tx };
-            let uc = AddLogEntry { store: &store, at_millis: now_millis() };
+            let uc = AddLogEntry {
+                store: &store,
+                at_millis: now_millis(),
+            };
             let seq = uc.run(&stream, &payload)?;
             json!({ "seq": seq })
         }
@@ -91,30 +94,87 @@ fn run(inv: cli::Invocation) -> Result<serde_json::Value, AppError> {
                 .collect();
             json!({ "entries": items })
         }
-        Command::FsmDefine { name, def_json } => {
+        Command::FsmDefine {
+            name,
+            def_json,
+            context_json,
+        } => {
             let def: Definition = serde_json::from_str(&def_json)
                 .map_err(|e| error::TechnicalError::new(format!("invalid definition JSON: {e}")))?;
+            let context = parse_context(context_json)?;
             let store = SqliteState { tx: &tx };
             let uc = DefineMachine { store: &store };
-            let current = uc.run(&name, def)?;
+            let current = uc.run(&name, def, context)?;
             json!({ "name": name, "current": current })
         }
-        Command::FsmTransition { name, to } => {
+        Command::FsmTransition {
+            name,
+            to,
+            context_json,
+        } => {
+            let context = context_json
+                .map(|raw| parse_context(Some(raw)))
+                .transpose()?;
             let store = SqliteState { tx: &tx };
             let uc = Transition { store: &store };
-            let current = uc.run(&name, &to)?;
+            let current = uc.run(&name, &to, context)?;
             json!({ "name": name, "current": current })
         }
         Command::FsmState { name } => {
             let store = SqliteState { tx: &tx };
             let uc = GetState { store: &store };
-            let current = uc.run(&name)?;
-            json!({ "name": name, "current": current })
+            let (current, context) = uc.run(&name)?;
+            json!({ "name": name, "current": current, "context": context })
+        }
+        Command::Inspect { name } => {
+            let ledger = SqliteLedger { tx: &tx };
+            let state = SqliteState { tx: &tx };
+            let uc = Inspect {
+                ledger: &ledger,
+                state: &state,
+            };
+            let overview = uc.run(name.as_deref())?;
+            let machines: Vec<_> = overview
+                .machines
+                .iter()
+                .map(|m| {
+                    json!({
+                        "name": m.name,
+                        "current": m.current,
+                        "terminal": m.terminal,
+                        "has_context": m.has_context,
+                    })
+                })
+                .collect();
+            let streams: Vec<_> = overview
+                .streams
+                .iter()
+                .map(|s| {
+                    json!({
+                        "name": s.name,
+                        "count": s.count,
+                        "last_seq": s.last_seq,
+                        "last_at": s.last_at.to_string(),
+                    })
+                })
+                .collect();
+            json!({ "machines": machines, "streams": streams })
         }
     };
 
     tx.commit().map_err(error::TechnicalError::from)?;
     Ok(value)
+}
+
+/// Parse the optional `--context` blob into opaque JSON. Absent → `Null` (a
+/// machine born without a cursor). Malformed JSON is a *technical* error, like a
+/// bad definition or payload.
+fn parse_context(context_json: Option<String>) -> Result<serde_json::Value, AppError> {
+    match context_json {
+        None => Ok(serde_json::Value::Null),
+        Some(raw) => serde_json::from_str(&raw)
+            .map_err(|e| error::TechnicalError::new(format!("invalid context JSON: {e}")).into()),
+    }
 }
 
 /// A payload that is not valid JSON is a *technical* error (bad input to the tool),
