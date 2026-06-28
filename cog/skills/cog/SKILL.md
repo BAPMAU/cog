@@ -15,7 +15,8 @@ toolchain), then retry the command:
 cargo install --git https://github.com/BAPMAU/cog cog --locked
 ```
 
-See [REFERENCE.md](REFERENCE.md) if `cargo` is unavailable or to update an existing install.
+Or run `/setup-cog`, which installs and verifies it for you. See [REFERENCE.md](REFERENCE.md)
+if `cargo` is unavailable or to update an existing install.
 
 ## The contract (read first)
 
