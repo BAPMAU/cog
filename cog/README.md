@@ -8,16 +8,18 @@ un état qui **survit entre les process** : des journaux d'événements et des m
 
 ## Installation
 
+Le plus simple — installe `cog` sur le PATH depuis le dépôt (nécessite une toolchain Rust) :
+
 ```sh
-cargo build --release
-# binaire : target/release/cog
+cargo install --git https://github.com/BAPMAU/cog --locked
+cog --help            # utilisable depuis n'importe quel dossier
 ```
 
-Pour l'avoir directement sur le PATH (recommandé) :
+Depuis un clone local (pour développer cog) :
 
 ```sh
-cargo install-local   # (ré)installe cog dans ~/.cargo/bin
-cog --help            # utilisable depuis n'importe quel dossier
+cargo build --release   # binaire : target/release/cog
+cargo install-local     # (ré)installe le clone dans ~/.cargo/bin
 ```
 
 ## Comment ça marche
