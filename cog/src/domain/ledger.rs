@@ -14,6 +14,16 @@ pub struct LogEntry {
     pub payload: String,
 }
 
+/// A lightweight projection of a stream for overviews: counts and the last
+/// entry's coordinates, without loading any entry.
+#[derive(Debug, Clone)]
+pub struct StreamSummary {
+    pub name: String,
+    pub count: i64,
+    pub last_seq: i64,
+    pub last_at: i64,
+}
+
 /// View of a stream. Used to express read invariants.
 pub struct Stream {
     name: String,

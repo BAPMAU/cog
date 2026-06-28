@@ -134,6 +134,11 @@ impl StateMachine {
         })
     }
 
+    /// Whether the machine currently sits on a terminal state.
+    pub fn is_terminal(&self) -> bool {
+        self.def.is_terminal(&self.current)
+    }
+
     /// Fold an optional context blob into the machine, consuming `self` and
     /// returning a new value: `Some` wholly replaces the blob, `None` preserves it.
     pub fn with_context(self, context: Option<serde_json::Value>) -> Self {

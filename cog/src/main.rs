@@ -11,7 +11,7 @@ mod domain;
 mod error;
 mod infra;
 
-use application::usecases::{AddLogEntry, DefineMachine, GetState, QueryLog, Transition};
+use application::usecases::{AddLogEntry, DefineMachine, GetState, Inspect, QueryLog, Transition};
 use domain::state_machine::Definition;
 use error::AppError;
 use infra::cli::{self, Command};
@@ -125,6 +125,40 @@ fn run(inv: cli::Invocation) -> Result<serde_json::Value, AppError> {
             let uc = GetState { store: &store };
             let (current, context) = uc.run(&name)?;
             json!({ "name": name, "current": current, "context": context })
+        }
+        Command::Inspect { name } => {
+            let ledger = SqliteLedger { tx: &tx };
+            let state = SqliteState { tx: &tx };
+            let uc = Inspect {
+                ledger: &ledger,
+                state: &state,
+            };
+            let overview = uc.run(name.as_deref())?;
+            let machines: Vec<_> = overview
+                .machines
+                .iter()
+                .map(|m| {
+                    json!({
+                        "name": m.name,
+                        "current": m.current,
+                        "terminal": m.terminal,
+                        "has_context": m.has_context,
+                    })
+                })
+                .collect();
+            let streams: Vec<_> = overview
+                .streams
+                .iter()
+                .map(|s| {
+                    json!({
+                        "name": s.name,
+                        "count": s.count,
+                        "last_seq": s.last_seq,
+                        "last_at": s.last_at.to_string(),
+                    })
+                })
+                .collect();
+            json!({ "machines": machines, "streams": streams })
         }
     };
 

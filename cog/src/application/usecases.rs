@@ -4,7 +4,7 @@
 //! technical channel depending on the cause).
 
 use crate::application::ports::{LedgerStore, StateStore};
-use crate::domain::ledger::LogEntry;
+use crate::domain::ledger::{LogEntry, StreamSummary};
 use crate::domain::state_machine::{Definition, StateMachine};
 use crate::error::{AppError, DomainError};
 
@@ -97,5 +97,55 @@ impl<'a, S: StateStore> GetState<'a, S> {
                 name: name.to_string(),
             })?;
         Ok((machine.current, machine.context))
+    }
+}
+
+/// A machine seen in an overview: just enough to scan the store at a glance.
+pub struct MachineSummary {
+    pub name: String,
+    pub current: String,
+    pub terminal: bool,
+    pub has_context: bool,
+}
+
+/// The whole-store overview: every stream and every machine, summarized.
+pub struct Overview {
+    pub machines: Vec<MachineSummary>,
+    pub streams: Vec<StreamSummary>,
+}
+
+/// Read-only overview of everything in the store. With `name_filter`, keeps only
+/// streams and machines whose name contains that substring. Touches both stores
+/// but neither entity's invariants — it never loads stream entries.
+pub struct Inspect<'a, L: LedgerStore, S: StateStore> {
+    pub ledger: &'a L,
+    pub state: &'a S,
+}
+
+impl<'a, L: LedgerStore, S: StateStore> Inspect<'a, L, S> {
+    pub fn run(&self, name_filter: Option<&str>) -> Result<Overview, AppError> {
+        let matches = |n: &str| name_filter.is_none_or(|f| n.contains(f));
+
+        let streams = self
+            .ledger
+            .stream_summaries()?
+            .into_iter()
+            .filter(|s| matches(&s.name))
+            .collect();
+
+        let machines = self
+            .state
+            .list()?
+            .into_iter()
+            .filter(|(name, _)| matches(name))
+            .map(|(name, m)| MachineSummary {
+                name,
+                terminal: m.is_terminal(),
+                has_context: !m.context.is_null(),
+                current: m.current,
+            })
+            .collect();
+
+        Ok(Overview { machines, streams })
     }
 }

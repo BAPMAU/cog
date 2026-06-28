@@ -48,4 +48,28 @@ impl<'tx> StateStore for SqliteState<'tx> {
         )?;
         Ok(())
     }
+
+    fn list(&self) -> Result<Vec<(String, StateMachine)>, TechnicalError> {
+        let mut stmt = self
+            .tx
+            .prepare("SELECT name, def, current, context FROM state_machine ORDER BY name")?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (name, def_json, current, context_json) = row?;
+            let def: Definition = serde_json::from_str(&def_json)
+                .map_err(|e| TechnicalError::new(format!("corrupt definition: {e}")))?;
+            let context: serde_json::Value = serde_json::from_str(&context_json)
+                .map_err(|e| TechnicalError::new(format!("corrupt context: {e}")))?;
+            out.push((name, StateMachine::rehydrate(def, current, context)));
+        }
+        Ok(out)
+    }
 }

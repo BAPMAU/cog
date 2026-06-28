@@ -107,6 +107,23 @@ au-dessus de la feature Context. FSM `triage → fix_ci|handle_comments|await_re
 arrêt franc. Définition FSM + transition `--context` vérifiées de bout en bout sur le binaire.
 Commandes `gh` reprises de watch-pull-request. Skill `cog` (SKILL+REFERENCE) aligné sur `--context`.
 
+### Itération 4 — `cog inspect` (aperçu du store)  [FAIT — `cargo test`]
+Manque comblé : aucune commande ne permettait de DÉCOUVRIR le contenu d'un store (`log query`
+et `fsm state` exigent le nom à l'avance). `cog inspect [--name <substr>]` liste, en lecture
+seule, un RÉSUMÉ de chaque entité.
+- machine : `{name, current, terminal, has_context}` ; stream : `{name, count, last_seq, last_at}`.
+- Sortie : `{"machines":[...],"streams":[...]}`, triées par nom. `--name` filtre les deux familles
+  par sous-chaîne (`name.contains`, dans le use case).
+- Streams résumés par AGRÉGAT SQL (`COUNT/MAX(seq)/MAX(at_millis) GROUP BY stream`) — aucune
+  entrée chargée. Machines via `StateStore::list()` (rehydrate + `is_terminal()`).
+- Décisions utilisateur : résumé seul (pas de context complet ni dernières entrées) ; un seul
+  filtre `--name` (pas de `--kind`/`--state`).
+- Couches : domain `StreamSummary` + `StateMachine::is_terminal()` pub ; ports
+  `stream_summaries()`/`list()` ; use case `Inspect{ledger,state}` (read-model `Overview`/
+  `MachineSummary`) ; adapters sqlite ; cli flag `--name` + `HELP_INSPECT` ; main dispatch.
+- 4 tests e2e ajoutés (total 25 verts) : store vide, résumé multi-stream+fsm, filtre `--name`,
+  état terminal + context absent. clippy clean.
+
 ## Note pour reprise
 Reste à faire : (1) `cargo install --path .` — le `cog` global est un snapshot d'avant Context ;
 le skill watch-pr invoque le `cog` du PATH. (2) Commiter (feature + docs design + skill).

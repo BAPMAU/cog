@@ -33,6 +33,9 @@ pub enum Command {
     FsmState {
         name: String,
     },
+    Inspect {
+        name: Option<String>,
+    },
 }
 
 /// Outcome of parsing that is neither a runnable command nor a domain/technical
@@ -62,6 +65,7 @@ GLOBAL OPTIONS:
 COMMANDS:
     log     append-only journal per stream
     fsm     state machine with data-defined rules
+    inspect overview of every stream and machine in the store
 
 Run `cog <command> --help` for command-specific help, e.g. `cog log --help`.
 
@@ -102,11 +106,28 @@ EXAMPLES:
     cog fsm transition watch done --context '{\"last_seen\":42}'
     cog fsm state watch";
 
+pub const HELP_INSPECT: &str = "\
+cog inspect — overview of everything in the store
+
+USAGE:
+    cog inspect [--name <substr>]    summarize streams and machines
+
+Lists every log stream (entry count, last seq, last timestamp) and every state
+machine (current state, whether it is terminal, whether it carries a context
+blob). It loads no stream entries — just a glance at the store's shape.
+
+--name keeps only streams and machines whose name contains <substr>.
+
+EXAMPLES:
+    cog inspect
+    cog inspect --name watch";
+
 /// Pick the most specific help for what the user has typed so far.
 fn help_for(group: &str) -> &'static str {
     match group {
         "log" => HELP_LOG,
         "fsm" => HELP_FSM,
+        "inspect" => HELP_INSPECT,
         _ => HELP_TOP,
     }
 }
@@ -115,6 +136,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, Usage> {
     let mut store = DEFAULT_STORE.to_string();
     let mut help = false;
     let mut context_json: Option<String> = None;
+    let mut name_filter: Option<String> = None;
     let mut rest: Vec<String> = Vec::new();
 
     let mut i = 0;
@@ -129,6 +151,14 @@ pub fn parse(args: &[String]) -> Result<Invocation, Usage> {
                     &mut i,
                     "Option --context expects a JSON blob.",
                     HELP_FSM,
+                )?);
+            }
+            "--name" => {
+                name_filter = Some(next_value(
+                    args,
+                    &mut i,
+                    "Option --name expects a substring.",
+                    HELP_INSPECT,
                 )?);
             }
             "-h" | "--help" => help = true,
@@ -169,6 +199,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, Usage> {
             name: req(&rest, 2, "name", HELP_FSM)?,
         },
         ("fsm", _) => return Err(missing_sub("fsm", "define, transition or state", HELP_FSM)),
+
+        ("inspect", _) => Command::Inspect { name: name_filter },
 
         ("", _) => {
             return Err(Usage::Error {
