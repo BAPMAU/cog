@@ -55,7 +55,9 @@ impl Definition {
 
     fn require_known(&self, name: &str) -> Result<(), DomainError> {
         if self.state(name).is_none() {
-            return Err(DomainError::UnknownState { state: name.to_string() });
+            return Err(DomainError::UnknownState {
+                state: name.to_string(),
+            });
         }
         Ok(())
     }
@@ -65,7 +67,9 @@ impl Definition {
     }
 
     fn allows(&self, from: &str, to: &str) -> bool {
-        self.transitions.iter().any(|t| t.from == from && t.to == to)
+        self.transitions
+            .iter()
+            .any(|t| t.from == from && t.to == to)
     }
 }
 
@@ -87,12 +91,20 @@ impl StateMachine {
     pub fn define(def: Definition, context: serde_json::Value) -> Result<Self, DomainError> {
         def.validate()?;
         let current = def.initial.clone();
-        Ok(StateMachine { def, current, context })
+        Ok(StateMachine {
+            def,
+            current,
+            context,
+        })
     }
 
     /// Rebuild a persisted machine. The definition was validated when first defined.
     pub fn rehydrate(def: Definition, current: String, context: serde_json::Value) -> Self {
-        StateMachine { def, current, context }
+        StateMachine {
+            def,
+            current,
+            context,
+        }
     }
 
     /// Move to `to`. Consumes `self` and returns the advanced machine, so an
@@ -116,7 +128,10 @@ impl StateMachine {
                 to: to.to_string(),
             });
         }
-        Ok(StateMachine { current: to.to_string(), ..self })
+        Ok(StateMachine {
+            current: to.to_string(),
+            ..self
+        })
     }
 
     /// Fold an optional context blob into the machine, consuming `self` and

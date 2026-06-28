@@ -23,7 +23,10 @@ pub struct Stream {
 impl Stream {
     /// Rebuild a stream from the store (entries already sorted by `seq`).
     pub fn load(name: impl Into<String>, entries: Vec<LogEntry>) -> Self {
-        Stream { name: name.into(), entries }
+        Stream {
+            name: name.into(),
+            entries,
+        }
     }
 
     /// Entries, most recent first.
@@ -36,7 +39,9 @@ impl Stream {
     /// Read invariant: querying an empty stream is a *domain* error.
     pub fn require_non_empty(&self) -> Result<&Self, DomainError> {
         if self.entries.is_empty() {
-            return Err(DomainError::EmptyStream { stream: self.name.clone() });
+            return Err(DomainError::EmptyStream {
+                stream: self.name.clone(),
+            });
         }
         Ok(self)
     }

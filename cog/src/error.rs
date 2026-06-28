@@ -60,7 +60,9 @@ pub struct TechnicalError {
 
 impl TechnicalError {
     pub fn new(message: impl Into<String>) -> Self {
-        TechnicalError { message: message.into() }
+        TechnicalError {
+            message: message.into(),
+        }
     }
 }
 

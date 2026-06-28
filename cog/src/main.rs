@@ -70,7 +70,10 @@ fn run(inv: cli::Invocation) -> Result<serde_json::Value, AppError> {
         Command::LogAdd { stream, payload } => {
             validate_json(&payload)?;
             let store = SqliteLedger { tx: &tx };
-            let uc = AddLogEntry { store: &store, at_millis: now_millis() };
+            let uc = AddLogEntry {
+                store: &store,
+                at_millis: now_millis(),
+            };
             let seq = uc.run(&stream, &payload)?;
             json!({ "seq": seq })
         }
@@ -91,7 +94,11 @@ fn run(inv: cli::Invocation) -> Result<serde_json::Value, AppError> {
                 .collect();
             json!({ "entries": items })
         }
-        Command::FsmDefine { name, def_json, context_json } => {
+        Command::FsmDefine {
+            name,
+            def_json,
+            context_json,
+        } => {
             let def: Definition = serde_json::from_str(&def_json)
                 .map_err(|e| error::TechnicalError::new(format!("invalid definition JSON: {e}")))?;
             let context = parse_context(context_json)?;
@@ -100,8 +107,14 @@ fn run(inv: cli::Invocation) -> Result<serde_json::Value, AppError> {
             let current = uc.run(&name, def, context)?;
             json!({ "name": name, "current": current })
         }
-        Command::FsmTransition { name, to, context_json } => {
-            let context = context_json.map(|raw| parse_context(Some(raw))).transpose()?;
+        Command::FsmTransition {
+            name,
+            to,
+            context_json,
+        } => {
+            let context = context_json
+                .map(|raw| parse_context(Some(raw)))
+                .transpose()?;
             let store = SqliteState { tx: &tx };
             let uc = Transition { store: &store };
             let current = uc.run(&name, &to, context)?;

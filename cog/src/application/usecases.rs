@@ -73,7 +73,9 @@ impl<'a, S: StateStore> Transition<'a, S> {
         let machine = self
             .store
             .load(name)?
-            .ok_or_else(|| DomainError::NotInitialized { name: name.to_string() })?;
+            .ok_or_else(|| DomainError::NotInitialized {
+                name: name.to_string(),
+            })?;
         let advanced = machine.transition(to)?.with_context(context);
         self.store.save(name, &advanced)?;
         Ok(advanced.current)
@@ -91,7 +93,9 @@ impl<'a, S: StateStore> GetState<'a, S> {
         let machine = self
             .store
             .load(name)?
-            .ok_or_else(|| DomainError::NotInitialized { name: name.to_string() })?;
+            .ok_or_else(|| DomainError::NotInitialized {
+                name: name.to_string(),
+            })?;
         Ok((machine.current, machine.context))
     }
 }

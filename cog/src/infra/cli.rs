@@ -13,11 +13,26 @@ pub struct Invocation {
 }
 
 pub enum Command {
-    LogAdd { stream: String, payload: String },
-    LogQuery { stream: String },
-    FsmDefine { name: String, def_json: String, context_json: Option<String> },
-    FsmTransition { name: String, to: String, context_json: Option<String> },
-    FsmState { name: String },
+    LogAdd {
+        stream: String,
+        payload: String,
+    },
+    LogQuery {
+        stream: String,
+    },
+    FsmDefine {
+        name: String,
+        def_json: String,
+        context_json: Option<String>,
+    },
+    FsmTransition {
+        name: String,
+        to: String,
+        context_json: Option<String>,
+    },
+    FsmState {
+        name: String,
+    },
 }
 
 /// Outcome of parsing that is neither a runnable command nor a domain/technical
@@ -26,7 +41,10 @@ pub enum Usage {
     /// `-h`/`--help` (or a bare group): print this help, exit 0.
     Help(&'static str),
     /// Something is missing or wrong: print one sentence + contextual help, exit 64.
-    Error { sentence: String, help: &'static str },
+    Error {
+        sentence: String,
+        help: &'static str,
+    },
 }
 
 const DEFAULT_STORE: &str = ".cog/state.db";

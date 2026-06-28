@@ -237,7 +237,17 @@ fn fsm_terminal_state_blocks_further_transitions() {
 #[test]
 fn fsm_define_with_context_is_returned_by_state() {
     let s = store_path("fsm_ctx_define");
-    let (code, _) = run(&s, &["fsm", "define", "w", DEF, "--context", "{\"ci_head\":\"abc\"}"]);
+    let (code, _) = run(
+        &s,
+        &[
+            "fsm",
+            "define",
+            "w",
+            DEF,
+            "--context",
+            "{\"ci_head\":\"abc\"}",
+        ],
+    );
     assert_eq!(code, 0);
 
     let (code, v) = run(&s, &["fsm", "state", "w"]);
@@ -249,11 +259,28 @@ fn fsm_define_with_context_is_returned_by_state() {
 #[test]
 fn fsm_transition_with_context_advances_state_and_replaces_blob() {
     let s = store_path("fsm_ctx_transition");
-    run(&s, &["fsm", "define", "w", DEF, "--context", "{\"ci_head\":\"old\"}"]);
+    run(
+        &s,
+        &[
+            "fsm",
+            "define",
+            "w",
+            DEF,
+            "--context",
+            "{\"ci_head\":\"old\"}",
+        ],
+    );
 
     let (code, v) = run(
         &s,
-        &["fsm", "transition", "w", "polling", "--context", "{\"ci_head\":\"new\"}"],
+        &[
+            "fsm",
+            "transition",
+            "w",
+            "polling",
+            "--context",
+            "{\"ci_head\":\"new\"}",
+        ],
     );
     assert_eq!(code, 0);
     assert_eq!(v["value"]["current"], "polling");
@@ -267,7 +294,17 @@ fn fsm_transition_with_context_advances_state_and_replaces_blob() {
 #[test]
 fn fsm_transition_without_context_preserves_the_blob() {
     let s = store_path("fsm_ctx_preserve");
-    run(&s, &["fsm", "define", "w", DEF, "--context", "{\"ci_head\":\"keep\"}"]);
+    run(
+        &s,
+        &[
+            "fsm",
+            "define",
+            "w",
+            DEF,
+            "--context",
+            "{\"ci_head\":\"keep\"}",
+        ],
+    );
 
     let (code, _) = run(&s, &["fsm", "transition", "w", "polling"]);
     assert_eq!(code, 0);
